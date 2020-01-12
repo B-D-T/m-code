@@ -6,7 +6,7 @@ type table
     [
         #"Lower"=number,
         #"Upper"=number,
-        #"Grade"=text,
+        #"LetterGrade"=text,
         #"Midpoint"=number
     ],
  {

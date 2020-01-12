@@ -7,7 +7,7 @@
 
 let
 fn =
-	( numToLookup as number, strGradingScaleToUse as text) as text =>
+	( numToLookup as any, strGradingScaleToUse as text) as text =>
     let
 		// This tries to pull in one of the standard grading scales that I've stored in the shared repository.
 		// If it can't find anything by that name, it will look within the current workbook for a table with that name.
@@ -21,16 +21,17 @@ fn =
 				GradeScaleTable, 
 				each ([Lower] <= Number.From(numToLookup) )
 			)
-		)[Grade]
+		)[LetterGrade]
 	in
 		strLetterGrade,
 
 fnType = type function
     (
-		numToLookup as (type number meta 
+		numToLookup as (type any meta 
 			[
 				Documentation.FieldCaption = "Decimal score to look up",
-				Documentation.FieldDescription = "Enter number as decimal. E.g., put 0.65, not 65. Putting 65% will also work."
+				Documentation.FieldDescription = "Enter number as decimal",
+				Documentation.SampleValues = { "0.65, .65, or 65% will work" }
 			]
 		),
 		strGradingScaleToUse as (type text meta
