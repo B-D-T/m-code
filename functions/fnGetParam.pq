@@ -52,8 +52,6 @@ fn =
     in
         SetOutputType,
 
-// This function is structured as it is to allow improved function documentation.
-// See https://ssbi-blog.de/blog/technical-topics-english/writing-documentation-for-custom-m-functions-part1/ (and part2, and especially part3) to understand why
 fnType = type function
     (
         strKeyName as text,
@@ -73,6 +71,11 @@ fnType = type function
                         Description = "Look in the ParameterValue column of tblParameters. Return [as a list of numbers] the cell value where CourseCRNs is in the same row in the ParameterKey column.",
                         Code = "fnGetParam(""CourseCRNs"", ""number"", true, ""tblParameters"", ""ParameterKey"", ""ParameterValue"")",
                         Result = "{80140, 80224}"
+                    ],
+                    [
+                        Description = "This is the same as the example above, but with using the default parameters. The result is the same data as a single text string.",
+                        Code = "fnGetParam(""CourseCRNs"")",
+                        Result = """80140, 80224"""
                     ]
                 }
         ]
