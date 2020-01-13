@@ -6,7 +6,6 @@ The list of suffixes/prefixes came from one online where there was a function fo
 
 (strInputLastName as text) as text =>
     let
-        strInputLastName = "de Newton-John, Jr.",
         listLastNameSuffixes = { "jr", "sr", "ii", "iii", "iv", "v", "esq", "cpa", "dc", "dds", "vm", "jd", "md", "phd" },
         //listLastNamePrefixes = { "da", "de", "del", "dos", "el", "la", "st", "van", "von" },
         
