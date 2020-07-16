@@ -6,7 +6,7 @@
     optional pPostDateDescriptor as text
 ) as binary =>
 
-// Originally pulled from ApprenticeshipResults.xlsx > fMostRecentFile
+// Originally pulled from ApprenticeshipResults.xlsx > fMostRecentFile. Also developed with Mosaic MLS data analysis.
 
 let
     // Variables for testing
