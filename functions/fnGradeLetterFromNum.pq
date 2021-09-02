@@ -1,4 +1,4 @@
-/* 
+/* fnGradeLetterFromNum.pq
 	Converts a numerical value into a letter grade based on the provided grading scale table
 	
 	For example, fLetterGrade(0.65, "tblGradeScaleABCF") --> "F"

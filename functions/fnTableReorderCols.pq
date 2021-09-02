@@ -1,9 +1,11 @@
-/* Reorders only the columns provided in the colsToReorder
-The code inserts the listed columns in 
-the beginning (inputPosOffset=0), 
-the end (inputPosOffset=null/undefined), 
-or anywhere in the middle (inputPosOffset=?).
-*/
+// fnTableReorderCols
+
+// Reorders only the columns provided in the colsToReorder
+// The code inserts the listed columns in 
+// the beginning (inputPosOffset=0), 
+// the end (inputPosOffset=null/undefined), 
+// or anywhere in the middle (inputPosOffset=?, where ? is a column position integer).
+
 
 (inputTable as table, colsToReorder as list, optional inputPosOffset as nullable number) as table =>
 	let

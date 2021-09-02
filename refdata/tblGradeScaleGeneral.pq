@@ -1,5 +1,6 @@
+// tblGradeScaleGeneral.pq
 // Grading scale table with A+ through F
-// Used for most grading.
+// Used for most undergraduate grading.
 
 #table(
 type table
