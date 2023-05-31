@@ -18,9 +18,12 @@ fn =
 		inputColNames = if List.Contains({null, "", " "}, paramColNames) then Table.ColumnNames(inputTable) else paramColNames,
 		inputDataType = if List.Contains({null, "", " "}, paramDataType) then Text.Type else paramDataType, 
 
+        // Remove any columns that aren't in the table
+        colsToConvert = List.Intersect({inputColNames, Table.ColumnNames(inputTable)}),
+
 		// Create a list of list-pairs that have each column and the data type that it should be. E.g., { {"ColA", type number}, {"ColB", type number} }		
 		listColTransformations = List.Transform(
-				inputColNames,
+				colsToConvert,
 				each {_, inputDataType}
 			),
 		// Transform the column types in the focal table based on the transformation list defined in the step above (listColTransformations)
