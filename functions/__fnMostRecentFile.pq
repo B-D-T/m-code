@@ -1,17 +1,15 @@
 (
     pPathToSourceFolder as text,
+    optional pFileStem as text,
     optional pFileExtensionOfOutput as text,
     optional pSuffixDelimiter as text,
     optional pPostDateDelimiter as text,
     optional pPostDateDescriptor as text
 ) as binary =>
 
-// Originally pulled from ApprenticeshipResults.xlsx > fMostRecentFile. Also developed with Mosaic MLS data analysis.
-
 let
     // Variables for testing
-    //pPathToSourceFolder = fVariable("vPathSupervisorLogApprovalCSVs"), pFileExtensionOfOutput = "csv", pSuffixDelimiter = "__", pPostDateDelimiter = "_", pPostDateDescriptor = "TXT",
-
+    // pPathToSourceFolder = pathCSVExportsDir, pFileStem = "all_sport_divs", pFileExtensionOfOutput = "csv", pSuffixDelimiter = "__", pPostDateDelimiter = null, pPostDateDescriptor = null, 
 
     // This code is designed for a naming convenion of FileStem__yyyymmdd_Aaa.xxx or FileStem__yyyymmdd-hhmm_Aaa.xxx
         // FileStem : Anything that doesn't have the delimiter in it. Even spaces are okay.
@@ -31,11 +29,10 @@ let
     strSuffixDelimiter = if pSuffixDelimiter = null then "__" else pSuffixDelimiter,
 
     // This separates the date from anything after it. It does not have to be unique within the filename.
-    strPostDateDelimiter = pPostDateDelimiter,
+    strPostDateDelimiter = if pPostDateDelimiter = null then "." else pPostDateDelimiter,
 
     // A Qualtrics output file has the text values or the numeric values. This parameter looks for 'Txt' or 'Num' to distiguish which we want back. This can be null if there's only one data type in the folder. It can also be anything else, if you're using some other type of descriptor in the filename, but you might need to tweak this code if that's the case.
-    strPostDateDescriptor = Text.Lower(pPostDateDescriptor),
-
+    strPostDateDescriptor = if pPostDateDescriptor = null then "" else Text.Lower(pPostDateDescriptor),
 
     
     SourceFolder = Folder.Files(strPathToSourceFolder),
@@ -67,12 +64,20 @@ let
 
     // Filter file types to show only the ones we want
     FilteredForExtension = Table.SelectRows(SourceFolder, each Text.Lower([Extension]) = "." & strFileExtensionOfOutput ),
+    
+    // Filter for the file stem, which can be anywhere in the filename. The code just does a filter for it.
+    FilteredForStem = if (pFileStem = null) or (pFileStem = "")
+        then FilteredForExtension
+        else Table.SelectRows(FilteredForExtension, each Text.Contains([Name], pFileStem)),
 
-    // If there is not Descriptor, this will just pull the most recent file in the list.
-    FilteredForDataDescriptor = Table.SelectRows(FilteredForExtension, each Text.EndsWith(Text.Lower([Name]), strPostDateDelimiter & strPostDateDescriptor & "." & strFileExtensionOfOutput) ), // "-Txt.csv"
+    // If there is not Descriptor, this will just return all files
+    FilteredForDataDescriptor = if strPostDateDescriptor = ""
+        then FilteredForStem
+        else Table.SelectRows(FilteredForStem, each Text.EndsWith(Text.Lower([Name]), strPostDateDelimiter & strPostDateDescriptor & "." & strFileExtensionOfOutput) ), // "-Txt.csv"
 
     AddedFilenameDate = Table.AddColumn(FilteredForDataDescriptor, "FilenameDateTime", each fParseFilenameDateTime([Name], strSuffixDelimiter, strPostDateDelimiter), type datetime ),
-    FilteredForMostRecent = Table.SelectRows(AddedFilenameDate, let dtMostRecent = List.Max(AddedFilenameDate[FilenameDateTime]) in each [FilenameDateTime] = dtMostRecent ),
+    RemovedErrorsOnFileDatetime = Table.RemoveRowsWithErrors(AddedFilenameDate, {"FilenameDateTime"}),
+    FilteredForMostRecent = Table.SelectRows(RemovedErrorsOnFileDatetime, let dtMostRecent = List.Max(RemovedErrorsOnFileDatetime[FilenameDateTime]) in each [FilenameDateTime] = dtMostRecent ),
 
     binFileToImport = FilteredForMostRecent[Content]{0}
 in
