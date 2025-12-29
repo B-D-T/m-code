@@ -33,7 +33,7 @@ docstring = type function (
         This works for both SharePoint site document libraries and individual OneDrive folders.
         ",
         Documentation.Author = "B. David Tyler",
-        Documentation.Version = "0.0.1",
+        Documentation.Version = "0.0.2",
         Documentation.Examples = {
             [
                 Description = "Retrieve contents of a SharePoint folder",
@@ -48,62 +48,88 @@ docstring = type function (
         }
     ],
 
-MAIN_FUNCTION_INIT = (pathTarget as text) as table =>
+
+// The "Simple" approach returns the URL as a directory path by ensuring it ends with a trailing slash.
+// The "Robust" approach attempts to access the path via SharePoint.Contents to confirm it is a valid directory.
+fnEnsurePathIsDirectory = (path as text, optional robust_method as logical) as text =>
+    // Potential improvement: I wonder it would be better to go one step up and see if the final segment has Content=Binary.
     let
-        // The "Simple" approach returns the URL as a directory path by ensuring it ends with a trailing slash.
-        // The "Robust" approach attempts to access the path via SharePoint.Contents to confirm it is a valid directory.
-        // Potential improvement: I wonder it would be better to go one step up and see if the final segment has Content=Binary.
-        fnEnsurePathIsDirectory = (path as text, optional robust_method as logical) as text =>
-            let
-                approach = if (robust_method = true or robust_method = null) then "robust" else "simple",
-                PATH_DELIMITER = "/",
+        approach = if (robust_method = true or robust_method = null) then "robust" else "simple",
+        PATH_DELIMITER = "/",
 
-                // This is the result for the "simple" approach
-                pathWithTrailingSlash = if Text.EndsWith(path, PATH_DELIMITER) then path else path & PATH_DELIMITER,
+        // This is the result for the "simple" approach
+        pathWithTrailingSlash = if Text.EndsWith(path, PATH_DELIMITER) then path else path & PATH_DELIMITER,
 
-                urlComponents = fnParseSharepointURL(path, "record"),
-                PathToRoot = urlComponents[PathToRoot],
-
-                resultRecord = try SharePoint.Contents(PathToRoot, [ApiVersion = 15]), 
-                resultRobust = if resultRecord[HasError] = false
-                    then pathWithTrailingSlash
-                    else error resultRecord[Error],
-
-                result = if approach = "simple" then pathWithTrailingSlash else resultRobust
-            in
-                result,
-
-
-        pathToParse = fnEnsurePathIsDirectory(pathTarget),
-        urlComponents = fnParseSharepointURL(pathToParse, "record"),
+        urlComponents = fnParseSharepointURL(path, "record"),
         PathToRoot = urlComponents[PathToRoot],
-        PathSegmentsFromRoot = urlComponents[PathSegmentsFromRoot],
 
-        SharepointRootContents = SharePoint.Contents(PathToRoot, [ApiVersion = 15]),
+        resultRecord = try SharePoint.Contents(PathToRoot, [ApiVersion = 15]), 
+        resultRobust = if resultRecord[HasError] = false
+            then pathWithTrailingSlash
+            else error resultRecord[Error],
+
+        result = if approach = "simple" then pathWithTrailingSlash else resultRobust
+    in
+        result,
+
+// This receives an error record raised by the code and returns a new error record with a more user-friendly message.
+fnCreateErrorRec_InvalidPath = (err as record) as record => [
+    Reason = "Invalid path provided",
+    Message = "
+    This probably means one of the following:  
+      A) The code failed as a result of shoddy coding on my part.
+      B) You passed the path to a file instead of to a folder/ directory.
+      or
+      C) The code could not follow the path that you provided.  
+    Please copied the full URL directly from the Path button in the browser and try pasting the path again.
+    ",
+    Detail = err[Detail],
+    // Message.Format = err[Message.Format],
+    Message.Parameters = err[Message.Parameters],
+    ErrorCode = err[ErrorCode]
+],
+// This is just SharePoint.Contents, but I could add some better error handling or logging 
+fnConnectToSharepointRoot = (pathToRoot as text) as table =>
+    let
+        result = try SharePoint.Contents(pathToRoot, [ApiVersion = 15]),
+        SharepointRootContents = if result[HasError] = false
+            then result[Value]
+            else error result[Error]
+    in
+        SharepointRootContents,
+// Navigate through the folder structure to get to the target directory contents
+fnNavigateToTargetDirectory = (rootContents as table, pathSegments as list) as table =>
+    // This is the main value of the entire module.
+    // This step uses an accumulator to iterate through the folder structure
+    // as if the user were clicking on Table, Content, Table, Content, etc.
+    // It doesn't actually accumulate - it just drills down through the folder structure.
+    let
+        fnMoveToNextFolder = (currentContents as table, folderName as text) as table =>
+            currentContents{[Name = folderName]}[Content],
 
         TargetDirectoryContents =
             try
                 List.Accumulate(
-                    PathSegmentsFromRoot,
-                    SharepointRootContents,
-                    (accumulator, folderName) => accumulator{[Name = folderName]}[Content]
+                    pathSegments,
+                    rootContents,
+                    (acc, curFolder) => fnMoveToNextFolder(acc, curFolder)
                 )
             catch (err) =>
-                error [
-                    Reason = "Invalid path provided",
-                    Message = "
-    This means you either... 
-    A) Passed a file (remember that this only works for folders/ directories), or
-    B) The code could not follow the path that you provided.
-    Please double check that the path points to a valid SharePoint folder and you copied the full URL directly from the Path button in the browser.
-    ",
-                    Detail = err[Detail],
-                    // Message.Format = err[Message.Format],
-                    Message.Parameters = err[Message.Parameters],
-                    ErrorCode = err[ErrorCode]
-                ]
+                error fnCreateErrorRec_InvalidPath(err)
+    in
+        TargetDirectoryContents,
+
+// MAIN FUNCTION; i.e., what gets invoked when the user calls the function
+fnGetSharepointContents_INIT = (pathTarget as text) as table => 
+    let
+        pathToParse = fnEnsurePathIsDirectory(pathTarget),
+        urlComponents = fnParseSharepointURL(pathToParse, "record"),
+        
+        rootContents = fnConnectToSharepointRoot(urlComponents[PathToRoot]),
+        pathSegments = urlComponents[PathSegmentsFromRootDecoded],
+        TargetDirectoryContents = fnNavigateToTargetDirectory(rootContents,pathSegments)
     in
         TargetDirectoryContents
 
 in // end of full definition
-    Value.ReplaceType(MAIN_FUNCTION_INIT, docstring)
+    Value.ReplaceType(fnGetSharepointContents_INIT, docstring)

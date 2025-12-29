@@ -38,7 +38,7 @@ docstring = type function (
         Parses a SharePoint/OneDrive URL and returns either a ""table"" (default) of information
         or ""record"" with just the Key/Value pairs from the table.",
         Documentation.Author = "B. David Tyler",
-        Documentation.Version = "0.0.1",
+        Documentation.Version = "0.0.2",
         Documentation.Examples = {
             [
                 Description = "Parse a SharePoint directory to a table of components",
@@ -53,8 +53,8 @@ docstring = type function (
         }
     ],
 
-// Function with notes to the developer about working with paths. These don't do anything, but they're here for reference.
-fnDevInfo = () as table =>
+// This table just has notes to myself about working with paths. These don't do anything - they're here for reference.
+InfoTableForDeveloper =
     let 
         // Below are sample paths for different Sharepoint/OneDrive locations.
         // For any directory, make sure to include the trailing slash ("/") at the end of the path to indicate it's a folder;
@@ -93,117 +93,107 @@ fnDevInfo = () as table =>
         DemoTable = ReorderedColumns
     in
         DemoTable,
-InfoTableForDeveloper = fnDevInfo(),
 
-// MAIN FUNCTION STARTS HERE
-MAIN_FUNCTION_INIT = (pathInput as text, optional returnType as text) =>
+#"----MAIN FUNCTION STARTS HERE----" = "Helper functions first, then the main function body",
+
+PATH_DELIMITER = "/",
+
+// Assign as File or Folder based on whether the path ends with a "/" slash
+fnGetLikelyContentType = (path as text) as text =>
+    if path = null then null
+    else if Text.EndsWith(path, PATH_DELIMITER) then "Folder" else "File",
+// Determine the storage type based on the URL host (i.e., OneDrive vs. SharepointTeams)
+fnGetLocationStorageType = (uriParts as record) as text =>
+    // LocationStorageType is "OneDrive", "SharepointTeams", "Other", or null (for now). 
+    // I can't determine how to accurately differentiate SharepointMain from SharepointChannel yet.
+    // In theory, I could look for "General" as one of the first subdirectories, but that's not ALWAYS going to work.
     let
-        PATH_DELIMITER = "/",
-
-        partsOrig = Uri.Parts(pathInput),
-        partsHost = Text.Lower(partsOrig[Host]),
-
-        // File or Folder, but it's a weak determination based on path ending in "/" or not
-        LikelyContentType = if pathInput = null then null
-            else if Text.EndsWith(pathInput, PATH_DELIMITER) then "Folder" else "File",
-
-        // LocationStorageType is "OneDrive", "SharepointTeams", "Other", or null (for now). 
-        // I can't determine how to accurately differentiate SharepointMain from SharepointChannel yet.
-        // In theory, I could look for "General" as one of the first subdirectories, but that's not ALWAYS going to work.
+        partsHost = Text.Lower(uriParts[Host]),
         LocationStorageType = if (partsHost = null) then null 
             else if partsHost = "" then null
             else if Text.EndsWith(partsHost, "-my.sharepoint.com") then "OneDrive"
             else if Text.EndsWith(partsHost, "sharepoint.com") then "SharepointTeams"
-            else "Other",
-        
-        // Create list of path segments, ignoring any leading/trailing slashes
-        lstPathSubdirectories = Text.Split(Text.Trim(partsOrig[Path], PATH_DELIMITER), PATH_DELIMITER),
+            else "Other"
+    in
+        LocationStorageType,
 
-        numSegmentsFromHostToRoot = 
-            if LocationStorageType = null then null 
-            else if LocationStorageType = "OneDrive" then 2
-            else if LocationStorageType = "SharepointTeams" then 2
-            else 0, // Unknown; return just the host
-        lstSubdirectoriesHostToRoot = List.FirstN(lstPathSubdirectories, numSegmentsFromHostToRoot),
-        lstSubdirectoriesFromRootToTarget = List.Skip(lstPathSubdirectories, numSegmentsFromHostToRoot),
 
-        uriScheme = if Text.StartsWith(partsOrig[Scheme], "http") then partsOrig[Scheme] & "://" else partsOrig[Scheme],
-        PathComponentsAll = List.Combine({
-            {uriScheme, partsOrig[Host]},
-            lstPathSubdirectories
-        }),
+// Converts HTML encoded text back to normal text (e.g., %20 to space)
+fnDecodeText = (textToDecode as text) as text =>
+    // Credit for this elegantly simple solution goes to MS community user
+    // [v-jingzhang](https://community.fabric.microsoft.com/t5/Desktop/How-to-convert-these-encode-url-to-normal-text/td-p/2388189)
+    // via [Imke Feldmann](https://www.thebiccountant.com/2023/08/01/decode-uri-in-power-query-with-custom-uri-unescapedatastring-function)
+    let
+        parts = Uri.Parts("http://fakedomain?a=" & textToDecode),
+        query = parts[Query],
+        decoded = query[a]
+    in
+        decoded,
 
-        lstSegmentsToRoot = if numSegmentsFromHostToRoot = null then {}
-            else List.Combine({{partsOrig[Host]}, lstSubdirectoriesHostToRoot}),
-        strPathToRoot = Text.Combine({
-            uriScheme,
-            Text.Combine(lstSegmentsToRoot, PATH_DELIMITER), 
-            PATH_DELIMITER // always end with a slash to indicate a directory
-        }, null),
-        strPathFromRoot = Text.Combine(lstSubdirectoriesFromRootToTarget, PATH_DELIMITER),
+fnDecodeSegments = (lstSegments as list) as list => List.Transform(lstSegments, each fnDecodeText(_)),
 
-        results = {
-            [
-                Key = "PathFull",
-                Value = pathInput,
-                DataType = "text",
-                Description = "Original full path"
-            ],
-            [
-                Key = "LikelyContentType",
-                Value = LikelyContentType,
-                DataType = "text",
-                Description = "File or Folder (weak determination)"
-            ],
-            [
-                Key = "LocationStorageType",
-                Value = LocationStorageType,
-                DataType = "text",
-                Description = "OneDrive, SharepointTeams, Other, or null"
-            ],
-            [
-                Key = "PathToRoot",
-                Value = strPathToRoot,
-                DataType = "text",
-                Description = "Full path to the root directory for the OneDrive personal or Sharepoint Teams site"
-            ],
-            [
-                Key = "PathFromRoot",
-                Value = strPathFromRoot,
-                DataType = "text",
-                Description = "Path from the root directory to the target location"
-            ],
-            [
-                Key = "PathComponentsAll",
-                Value = PathComponentsAll,
-                DataType = "list (of text)",
-                Description = "List of path segments without any empty strings from leading/trailing slashes"
-            ],
-            [
-                Key = "PathSegmentsToRoot",
-                Value = lstSegmentsToRoot,
-                DataType = "list (of text)",
-                Description = "List of path segments from host to root directory"
-            ],
-            [
-                Key = "PathSegmentsFromRoot",
-                Value = lstSubdirectoriesFromRootToTarget,
-                DataType = "list (of text)",
-                Description = "List of path segments from root directory to target"
-            ],
-            [
-                Key = "URIParts",
-                Value = partsOrig,
-                DataType = "record",
-                Description = "Record with URI parts"]
-        },
-        resultTable = Table.TransformColumnTypes(Table.FromRecords(results),
+// Get number of path segments from host to root directory based on storage type
+fnGetNumSegmentsFromHostToRoot = (storageType as text) as number => if storageType = null then null
+    else if storageType = "OneDrive" then 2
+    else if storageType = "SharepointTeams" then 2
+    else 0, // Unknown; return just the host
+
+// Given the input information, this creates a record for use in the result table
+fnMakeRecordForTable = (Key as text, Value as any, DataType as text, Description as text) as record =>
+    [Key = Key, Value = Value, DataType = DataType, Description = Description],
+
+fnMakeResultTable = (lstRecords as list) as table =>
+    let
+        resultTable = Table.FromRecords(lstRecords),
+        typedTable = Table.TransformColumnTypes(resultTable,
             {
                 {"Key", type text},
                 {"DataType", type text},
                 {"Description", type text}
             }
-        ),
+        )
+    in
+        typedTable,
+
+// MAIN BODY OF FUNCTION: This is what gets invoked when the function is called
+fnParseSharepointURL_INIT = (pathInput as text, optional returnType as text) =>
+    let
+        partsOrig = Uri.Parts(pathInput),
+
+        LocationStorageType = fnGetLocationStorageType(partsOrig), 
+
+        // Create list of path segments, ignoring any leading/trailing slashes
+        lstPathSubdirectories = Text.Split(Text.Trim(partsOrig[Path], PATH_DELIMITER), PATH_DELIMITER),
+
+        numSegmentsFromHostToRoot = fnGetNumSegmentsFromHostToRoot(LocationStorageType),
+        lstSubdirectoriesHostToRoot = List.FirstN(lstPathSubdirectories, numSegmentsFromHostToRoot),
+        lstSubdirectoriesFromRootToTarget = List.Skip(lstPathSubdirectories, numSegmentsFromHostToRoot),
+
+        uriScheme = if Text.StartsWith(partsOrig[Scheme], "http") then partsOrig[Scheme] & "://" else partsOrig[Scheme],
+        PathComponentsAll = List.Combine({ {uriScheme, partsOrig[Host]}, lstPathSubdirectories }),
+
+        lstSegmentsToRoot = if numSegmentsFromHostToRoot = null then {} else List.Combine({ {partsOrig[Host]}, lstSubdirectoriesHostToRoot }),
+
+        results = {
+            fnMakeRecordForTable("PathFull", pathInput, "text", "Original full path"),
+            fnMakeRecordForTable("LikelyContentType", fnGetLikelyContentType(pathInput), "text", "File or Folder (weak determination)"),
+            fnMakeRecordForTable("LocationStorageType", LocationStorageType, "text", "OneDrive, SharepointTeams, Other, or null"),
+            fnMakeRecordForTable("PathToRoot",
+                Text.Combine({uriScheme, Text.Combine(lstSegmentsToRoot, PATH_DELIMITER), PATH_DELIMITER }),
+                "text", "Full path to the root directory for the OneDrive personal or Sharepoint Teams site"),
+            fnMakeRecordForTable("PathFromRoot",
+                Text.Combine(lstSubdirectoriesFromRootToTarget, PATH_DELIMITER), 
+                "text", "Path from the root directory to the target location"),
+            fnMakeRecordForTable("PathComponentsAll", PathComponentsAll, "list (of text)", "List of path segments without any empty strings from leading/trailing slashes"),
+            fnMakeRecordForTable("PathComponentsAllDecoded", fnDecodeSegments(PathComponentsAll), "list (of text)", "Same as PathComponentsAll but with URL-decoded text; e.g., %20 converted to space"),
+            fnMakeRecordForTable("PathSegmentsToRoot", lstSegmentsToRoot, "list (of text)", "List of path segments from host to root directory"),
+            fnMakeRecordForTable("PathSegmentsToRootDecoded", fnDecodeSegments(lstSegmentsToRoot), "list (of text)", "Same as PathSegmentsToRoot but with URL-decoded text; e.g., %20 converted to space"),
+            fnMakeRecordForTable("PathSegmentsFromRoot", lstSubdirectoriesFromRootToTarget, "list (of text)", "List of path segments from root directory to target"),
+            fnMakeRecordForTable("PathSegmentsFromRootDecoded", fnDecodeSegments(lstSubdirectoriesFromRootToTarget), "list (of text)", "Same as PathSegmentsFromRoot but with URL-decoded text; e.g., %20 converted to space"),
+            fnMakeRecordForTable("URIParts", partsOrig, "record", "Record with URI parts")
+        },
+        resultTable = fnMakeResultTable(results),
+
         asTable = resultTable,
         asRecord = Record.FromList(resultTable[Value], resultTable[Key]),
         result = if returnType = null then asTable 
@@ -213,4 +203,4 @@ MAIN_FUNCTION_INIT = (pathInput as text, optional returnType as text) =>
         result
 
 in // end of full definition
-    Value.ReplaceType(MAIN_FUNCTION_INIT, docstring)
+    Value.ReplaceType(fnParseSharepointURL_INIT, docstring)
