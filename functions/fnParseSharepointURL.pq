@@ -151,9 +151,10 @@ fnMakeResultTable = (lstRecords as list) as table =>
                 {"DataType", type text},
                 {"Description", type text}
             }
-        )
+        ),
+        SetPrimaryKey = Table.AddKey(typedTable, {"Key"}, true)
     in
-        typedTable,
+        SetPrimaryKey,
 
 // MAIN BODY OF FUNCTION: This is what gets invoked when the function is called
 fnParseSharepointURL_INIT = (pathInput as text, optional returnType as text) =>
